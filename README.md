@@ -1,8 +1,7 @@
 lxc-status
 ==========
 
-
-A simpler helper python script to see lxc resource usage
+A simpler helper python script to see lxc resource usage for Ubuntu 13.04
 
 Example output:
 
