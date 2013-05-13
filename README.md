@@ -15,3 +15,8 @@ Example output:
            database    9G      16G 61.06    1M     1M    272     272   774G    8
               redis  528M      16G  3.22   48K    48K     12      12   701G    4
     bekir@host:~$ 
+
+
+A better implementation with lua could be found in
+https://github.com/lxc/lxc/blob/f080ffd7d656fbd9505a8e8eb52a05d61355c677/src/lxc/lxc-top 
+but not released as of this writing. You should check if it released.
