@@ -1,0 +1,203 @@
+#!/usr/bin/python3
+import warnings
+warnings.filterwarnings("ignore", "The python-lxc API isn't yet stable")
+
+import lxc
+
+def human(i):
+    i = int(i)
+    affix = ''
+    units = ['E', 'P', 'T', 'G', 'M', 'K']
+    while ( i >= 1000 or (i > 0 and i%1024 == 0)) and units:
+        i /= 1024
+        affix = units.pop()
+    return "%d%s" % (i, affix)
+
+class ExtendedContainer(lxc.Container):
+    """ A hacky class for accessig lxc resource usage information as a dictionary"""
+
+    def __len__(self):
+        #TODO: calculate number of get methods without parameter and return count of methods
+        raise Exception('len() for ExtendedContainer implemented yet')
+
+    def __getitem__(self, key):
+        try:
+            result = getattr(self, "get_" + key)()
+        except AttributeError:
+            return AttributeError(key)
+        if isinstance(result, int):
+            return human(result)
+        return result
+
+    def __setitem__(self, key, value):
+        pass
+
+    def __delitem__(self, key):
+        pass
+
+    def __iter__(self):
+        #TODO: implement
+        raise Exception('Iteration not implemented yet')
+
+    def __contains__(self, item):
+        return
+        
+    # Now a list of get_*() funtions
+
+    def get_name(self):
+        return self.name
+
+    def _get_disk_bytes(self):
+        return self.get_cgroup_item('blkio.throttle.io_service_bytes').split('\n')
+
+    def get_disk_bytes_read(self):
+        return sum([int(i.split()[2]) for i in self._get_disk_bytes() if 'Read' in i])
+
+    def get_disk_bytes_wrote(self):
+        return sum([int(i.split()[2]) for i in self._get_disk_bytes() if 'Read' in i])
+
+    def get_disk_bytes_transferred(self):
+        return sum([int(i.split()[2]) for i in self._get_disk_bytes() if 'Total' in i])
+
+    def _get_disk_io(self):
+        return self.get_cgroup_item('blkio.throttle.io_serviced').split('\n')
+
+    def get_disk_io_read(self):
+        return sum([int(i.split()[2]) for i in self._get_disk_io() if 'Read' in i])
+
+    def get_disk_io_wrote(self):
+        return sum([int(i.split()[2]) for i in self._get_disk_io() if 'Read' in i])
+
+    def get_disk_io_transferred(self):
+        return sum([int(i.split()[2]) for i in self._get_disk_io() if 'Total' in i])
+
+    def get_cpus_str(self):
+        return self.get_cgroup_item('cpuset.cpus')
+
+    def _parse_cpus_str(self, cpus_str):
+        cpu_numbers = set()
+        for comma_item in cpus_str.split(','):
+            if '-' in comma_item:
+                start, stop = comma_item.split('-')
+                numbers = range(int(start), int(stop) + 1)
+                cpu_numbers.update(numbers)
+            else:
+                cpu_numbers.add(int(comma_item))
+        return list(cpu_numbers)
+       
+    def get_cpus(self):
+        return self._parse_cpus_str(self.get_cpus_str())
+
+    def get_cpu_count(self):
+        return len(self.get_cpus())
+
+    def get_rams(self):
+        return self.get_cgroup_item('cpuset.mems')
+
+    #TODO: Didn't check the current python3-lxc supports to get procs and tasks.
+    #def get_procs(self):
+    #    return self.get_cgroup_item('cgroup.procs').split('\n')
+    #
+    #def get_proc_count(self):
+    #    return len(self.get_procs())
+    #
+    #def get_tasks(self):
+    #    return self.get_cgroup_item('tasks').split('\n')
+    #
+    #def get_task_count(self):
+    #    return len(self.get_tasks())
+
+    def _get_keyed_stats(self, stats_file_content):
+        return dict([(i.split()[0], int(i.split[1])) for i in stats_file_content.split('\n')])
+
+    def get_cpuacct_stat_hz(self):
+        return self._get_keyed_stats(self.get_cgroup_item('cpuacct.stat'))
+
+    def get_cpuacct_userhz(self):
+        return self.get_cpuacct_stat_hz['user']
+
+    def get_cpuacct_systemhz(self):
+        return self.get_cpuacct_stat_hz['system']
+
+    def get_cpuacct_usage(self):
+        return int(self.get_cgroup_item('cpuacct.usage'))
+
+    def get_cpu_shares(self):
+        return int(self.get_cgroup_item('cpu.shares'))
+
+    def get_mem_usage(self):
+        return int(self.get_cgroup_item('memory.usage_in_bytes'))
+
+    def get_mem_limit(self):
+        return int(self.get_cgroup_item('memory.limit_in_bytes'))
+
+    def get_mem_percent(self):
+        return int(10000 * self.get_mem_usage() / self.get_mem_limit())/100
+
+    def get_mem_failcount(self):
+        return int(self.get_cgroup_item('memory.failcnt'))
+
+    def get_mem_max_usage(self):
+        return int(self.get_cgroup_item('memory.max_usage_in_bytes'))
+
+    def get_mem_stat(self):
+        return self._get_keyed_stats(self.get_cgroup_item('memory.stat'))
+
+    def get_mem_rss(self):
+        return self.get_mem_stat()['rss']
+
+    def get_mem_cache(self):
+        return self.get_mem_stat()['cache']
+
+    def get_mem_paged_in(self):
+        return self.get_mem_stat()['pgpgin']
+
+    def get_mem_paged_out(self):
+        return self.get_mem_stat()['pgpgout']
+
+    def get_mem_swappiness(self):
+        return int(self.get_cgroup_item('memory.swappiness'))
+
+    # TODO:Add memsw resources
+    # No memory.memsw values yet because it needs CONFIG_MEMCG_SWAP_ENABLED=y
+    # or swapaccount=1 parameter on boot. See: https://patchwork.kernel.org/patch/2010801/
+
+#TODO:
+# Add cli parameters for various resources
+# Optional unused CPU and ram slots
+# Optionally colorize/uncolorize output
+# Highlight shared/dedicated cpu
+# Add cpu shares
+
+if __name__ == '__main__':
+
+    fields = [
+        ["name", ["name", 15]],
+        ["mem_usage", ["mem", 5]],
+        ["mem_limit", ["mem_lim", 8]],
+        ["mem_percent", ["mem%", 5]],
+        ["disk_bytes_read", ["read", 5]],
+        ["disk_bytes_wrote", ["wrote", 6]],
+        ["disk_io_read", ["read#", 6]],
+        ["disk_io_wrote", ["wrote#", 7]],
+        ["cpuacct_usage", ["cpu", 6]],
+        ["cpu_count", ["cpu#", 4]],
+        #["cpus_str", ["cpus", 11]],
+    ]
+
+    field_fmt_array = ['%%(%s)%ss' % (k, v[1]) for k,v in fields]
+    fmt = '|'.join(field_fmt_array)
+    print(fmt % dict([(k,v[0]) for k,v in fields]))
+    print(fmt % dict([(k,v[1]*'-') for k,v in fields]))
+
+    for l_name in sorted(lxc.list_containers()):
+        l = ExtendedContainer(l_name)
+        if not l.running:
+            continue
+        print(fmt % l)
+
+
+
+
+
+
