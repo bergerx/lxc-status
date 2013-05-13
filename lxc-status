@@ -186,7 +186,7 @@ if __name__ == '__main__':
     ]
 
     field_fmt_array = ['%%(%s)%ss' % (k, v[1]) for k,v in fields]
-    fmt = '|'.join(field_fmt_array)
+    fmt = ' '.join(field_fmt_array)
     print(fmt % dict([(k,v[0]) for k,v in fields]))
     print(fmt % dict([(k,v[1]*'-') for k,v in fields]))
 
